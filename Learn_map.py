@@ -34,6 +34,7 @@ class Leaner:
                     print(f"Episode {i} finished with reward: {total_reward}")
                     running = False
                 pygame.display.flip()
+                state = next_state
                 clock.tick(FPS)
 
     def get_map(self):
@@ -48,38 +49,14 @@ class Leaner:
         if next_state == state:
             if reward != -2000:
                 if 0 < state[0] < 7 and 0 < state[1] < 7:
-                    if action == 0 and self.map[state[0], state[1] + 1] not in [1, -10] and self.map[
-                        state[0], state[1] - 1] not in [1, -10] and self.map[state[0] - 1, state[1]] == 1:
+                    if (action == 0 and self.map[state[0], state[1] + 1] not in [1, -10] and self.map[state[0], state[1] - 1] not in [1, -10]
+                            and self.map[state[0] - 1, state[1]] == 1):
                         self.map[state[0] - 1, state[1]] = -10
-                    elif action == 1 and self.map[state[0], state[1] + 1] not in [1, -10] and self.map[
-                        state[0], state[1] - 1] not in [1, -10] and self.map[state[0] + 1, state[1]] == 1:
+                    elif (action == 1 and self.map[state[0], state[1] + 1] not in [1, -10] and self.map[state[0], state[1] - 1] not in [1, -10]
+                            and self.map[state[0] + 1, state[1]] == 1):
                         self.map[state[0] + 1, state[1]] = -10
-                    elif action == 2 and self.map[state[0] - 1, state[1]] not in [1, -10] and self.map[
-                        state[0] + 1, state[1]] not in [1, -10] and self.map[state[0], state[1] - 1] == 1:
+                    elif action == 2 and self.map[state[0] - 1, state[1]] not in [1, -10] and self.map[state[0] + 1, state[1]] not in [1, -10] and self.map[state[0], state[1] - 1] == 1:
                         self.map[state[0], state[1] - 1] = -10
-                    elif action == 3 and self.map[state[0] - 1, state[1]] not in [1, -10] and self.map[
-                        state[0] + 1, state[1]] not in [1, -10] and self.map[state[0], state[1] + 1] == 1:
+                    elif (action == 3 and self.map[state[0] - 1, state[1]] not in [1, -10] and self.map[state[0] + 1, state[1]] not in [1, -10]
+                            and self.map[state[0], state[1] + 1] == 1):
                         self.map[state[0], state[1] + 1] = -10
-    def learn(self):
-        env = UnknownAngryBirds()
-        screen, clock = PygameInit.initialization()
-        FPS = 100000
-        for i in range(10):
-            state = env.reset()
-            running = True
-            total_reward = 0
-            while running:
-                for event in pygame.event.get():
-                    if event.type == pygame.QUIT:
-                        pygame.quit()
-
-                env.render(screen)
-                action = random.choice([0, 1, 2, 3])
-                next_state, reward, done = env.step(action)
-                self.upgrade( state, next_state, action, reward)
-                if done:
-                    print(f"Episode {i} finished with reward: {total_reward}")
-                    running = False
-                pygame.display.flip()
-                clock.tick(FPS)
-        pygame.quit()
