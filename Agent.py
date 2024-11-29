@@ -1,87 +1,100 @@
 import numpy as np
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '1'
-import tensorflow as tf
-from tensorflow.keras import Sequential
-from tensorflow.keras.layers import Dense
-from tensorflow import keras
+import torch
+import torch.nn as nn
+import torch.optim as optim
 from collections import deque
 import random
 
-gamma = 0.99
+gamma = 0.9
 epsilon = 1.0
 epsilon_min = 0.01
-epsilon_decay = 0.999
+epsilon_decay = 0.99
 learning_rate = 0.001
-batch_size = 64
+batch_size = 254
 memory_size = 100000
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-# تعریف مدل
-def make_model(input_shape, hidden_size, output_size):
-    model = Sequential([
-        Dense(hidden_size, activation='relu'),
-        #Dense(hidden_size, activation='relu', input_shape=input_shape),
-        Dense(hidden_size, activation='relu'),
-        Dense(output_size, activation='linear')  # خروجی برای 4 اکشن
-    ])
-    model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
-                  loss='mse')
-    return model
+class QNetwork(nn.Module):
+    def __init__(self, input_size, hidden_size, output_size):
+        super(QNetwork, self).__init__()
+        self.fs0 = nn.Linear(input_size,hidden_size)
+        self.fs1 = nn.Linear(hidden_size,hidden_size)
+        self.fs2 = nn.Linear(hidden_size,output_size)
+        self.loss_fn = torch.nn.MSELoss()
+
+    def forward(self, x):
+        x = torch.relu(self.fs0(x))
+        x = torch.relu(self.fs1(x))
+        return self.fs2(x)
+
+
+class ReplayBuffer:
+    def __init__(self, length):
+        self.memory = deque(maxlen=length)
+
+    def add(self, member):
+        state, action, reward, next_state, done = member
+        self.memory.append((
+            torch.tensor(state, dtype=torch.float32),
+            torch.tensor(action, dtype=torch.long),
+            torch.tensor(reward, dtype=torch.long),
+            torch.tensor(next_state, dtype=torch.float32),
+            torch.tensor(done, dtype=torch.float32)
+        ))
+
+    def sample(self, batch_size):
+        batch = random.sample(self.memory, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        return (
+
+            torch.stack(states),  # اتصال داده‌های states به یک Tensor
+            torch.stack(actions),  # اتصال actions
+            torch.stack(rewards),  # اتصال rewards
+            torch.stack(next_states),  # اتصال next_states
+            torch.stack(dones)  # اتصال dones
+        )
+
+    def __len__(self):
+        return self.memory.__len__()
 
 
 class Agent:
-
     def __init__(self):
         self.n_games = 0
         self.epsilon = epsilon
         self.epsilon_min = epsilon_min
         self.epsilon_decay = epsilon_decay
-
         self.gamma = gamma
-        self.memory = deque(maxlen=memory_size)
-        self.model = make_model(input_shape=(2,), hidden_size=8, output_size=4)
-        self.loss_fn = keras.losses.MeanSquaredError()
-        self.optimizer = keras.optimizers.Adam(learning_rate=learning_rate)
+        self.memory = ReplayBuffer(memory_size)
+        self.policy = QNetwork(input_size=2, hidden_size=64, output_size=4)
+        self.target = QNetwork(input_size=2, hidden_size=64, output_size=4)
+        self.target.load_state_dict(self.policy.state_dict())
+        self.optimizer = optim.Adam(self.policy.parameters(), lr=learning_rate)
+        self.loss_fn = nn.MSELoss()
 
-    def epsilon_greedy_policy(self, state):
-        state = np.expand_dims(np.array(state), axis=0)
-        if np.random.rand() < self.epsilon:
+    def learn(self, state, action, reward, next_state, done):
+        self.memory.add((state, action, reward, next_state, done))
+    def select_action(self, state):
+        if random.random() < self.epsilon:
             return random.choice([0, 1, 2, 3])
         else:
-            Q_values = self.model.predict(state, verbose=0)
-            return np.argmax(Q_values[0])
+            with torch.no_grad():
+                state = torch.FloatTensor(state).unsqueeze(0)
+                return torch.argmax(self.policy(state)).item()
 
-    def store_experience(self, state, action, reward, next_state, done):
-        self.memory.append((state, action, reward, next_state, done))
-
-    def sample_experiences(self, batch_size):
-        indices = np.random.choice(len(self.memory), size=batch_size, replace=False)
-        batch = [self.memory[index] for index in indices]
-        states, actions, rewards, next_states, dones = [
-            np.array([experience[field_index] for experience in batch])
-            for field_index in range(5)
-        ]
-        return states, actions, rewards, next_states, dones
-
-    def training_step(self, batch_size):
+    def train(self):
         if len(self.memory) < batch_size:
             return
+        batch = self.memory.sample(batch_size)
+        states, actions, rewards, next_states, dones = self.memory.sample(batch_size)
+        q_values = self.policy(states).gather(1, actions.unsqueeze(1)).squeeze(1)
+        with torch.no_grad():
+            next_q_values = self.target(next_states).max(1)[0]
+            target_q_values = rewards + gamma * next_q_values * (1 - dones)
 
-        states, actions, rewards, next_states, dones = self.sample_experiences(batch_size)
-        next_Q_values = self.model.predict(next_states, verbose=0)
-        max_next_Q_values = np.max(next_Q_values, axis=1)
-        target_Q_values = rewards + (1 - dones) * self.gamma * max_next_Q_values
-        actions_one_hot = tf.one_hot(actions, depth=4)
-
-        with tf.GradientTape() as tape:
-            all_Q_values = self.model(states, training=True)
-            Q_values = tf.reduce_sum(all_Q_values * actions_one_hot, axis=1)
-            loss = tf.reduce_mean(self.loss_fn(target_Q_values, Q_values))
-
-        grads = tape.gradient(loss, self.model.trainable_variables)
-        self.optimizer.apply_gradients(zip(grads, self.model.trainable_variables))
-
-        # کاهش مقدار epsilon برای اکتشاف-استفاده (exploration-exploitation)
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        loss = self.loss_fn(q_values, target_q_values)
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+        self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
