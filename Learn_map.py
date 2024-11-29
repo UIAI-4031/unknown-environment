@@ -25,17 +25,13 @@ class Leaner:
                 for event in pygame.event.get():
                     if event.type == pygame.QUIT:
                         pygame.quit()
-
-                self.env.render(screen)
                 action = random.choice([0, 1, 2, 3])
                 next_state, reward, done = self.env.step(action)
                 self.upgrade(state, next_state, action, reward)
                 if done:
                     print(f"Episode {i} finished with reward: {total_reward}")
                     running = False
-                pygame.display.flip()
                 state = next_state
-                clock.tick(FPS)
 
     def get_map(self):
         return self.map
