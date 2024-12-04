@@ -26,7 +26,7 @@ class Leaner:
                     if event.type == pygame.QUIT:
                         pygame.quit()
                 action = random.choice([0, 1, 2, 3])
-                next_state, reward, done = self.env.step(action)
+                next_state, reward,pigs, done = self.env.step(action)
                 self.upgrade(state, next_state, action, reward)
                 if done:
                     print(f"Episode {i} finished with reward: {total_reward}")
