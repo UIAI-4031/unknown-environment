@@ -101,10 +101,6 @@ class Agent:
         self.optimizer.step()
         self.loss_history.append(loss.item())
         self.epsilon = max(self.epsilon_min, self.epsilon )
-
-    def update_target(self):
-        self.target.load_state_dict(self.policy.state_dict())
-
     def test(self):
         self.epsilon = 0.0
         self.epsilon_min = 0

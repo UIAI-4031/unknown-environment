@@ -1,13 +1,11 @@
 import numpy as np
 import pygame
 from environment import UnknownAngryBirds, PygameInit
-from Learn_map import Leaner
 import matplotlib.pyplot as plt
 from Agent import *
-from GridMap import GridMap as gp
 
 
-def choose_step(visited, env, agent, state, gridMap,previous_pigs):
+def choose_step(env, agent, state,previous_pigs):
     pushState = np.append(np.array(state),np.array(previous_pigs))
     action = agent.select_action(pushState)
     next_state, reward,pigs, done = env.step(action)
@@ -21,21 +19,16 @@ def choose_step(visited, env, agent, state, gridMap,previous_pigs):
         agent.epsilon = agent.epsilon * agent.epsilon_decay
     pushNextState = np.append(np.array(next_state),np.array(pigs))
     agent.memory.add([pushState, action, temp, pushNextState, done])
-    return pigs,visited, next_state, action, reward, done
+    return pigs, next_state, action, reward, done
 
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    FPS = 10
-    base = Leaner()
-    base_map = base.get_map()
-    env = base.get_env()
+
+    env = UnknownAngryBirds()
     screen, clock = PygameInit.initialization()
-    FPS = 100000
-    grid_map = gp(base_map)
     episode_reward = []
     agent = Agent(10,128,4)
-    print(base_map)
     for episode in range(1000):
         screen, clock = PygameInit.initialization()
         state = env.reset()
@@ -48,8 +41,7 @@ if __name__ == "__main__":
                 if event.type == pygame.QUIT:
                     pygame.quit()
                 env.render(screen)
-
-            pigs,list, next_state, action, reward, done = choose_step(visited_node, env, agent, state, grid_map,pigs)
+            pigs, next_state, action, reward, done = choose_step(env, agent, state,pigs)
             visited_node = list
             state = next_state
             total_reward += reward
@@ -58,7 +50,6 @@ if __name__ == "__main__":
 
             if done:
                 print(f"Episode {episode} finished with reward: {total_reward}")
-                grid_map.reset()
                 episode_reward.append(total_reward)
                 running = False
     agent.test()
@@ -76,13 +67,12 @@ if __name__ == "__main__":
                     pygame.quit()
             env.render(screen)
 
-            pigs,list, next_state, action, reward, done = choose_step(visited_node, env, agent, state, grid_map,pigs)
+            pigs, next_state, action, reward, done = choose_step(env, agent, state,pigs)
             visited_node = list
             state = next_state
             total_reward += reward
             if done:
                 print(f"Episode {episode} finished with reward: {total_reward}")
-                grid_map.reset()
                 episode_reward.append(total_reward)
                 running = False
             pygame.display.flip()
